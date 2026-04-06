@@ -6,6 +6,7 @@
 <title>Reclamos & Devoluciones · Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --bg: #0f0e0c;
@@ -804,41 +805,173 @@ function generateInforme() {
   };
   detectColumns();
 
-  const lines = [
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    `   INFORME DE CIERRE DE RECLAMO · R-CO-001`,
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    `N° de reclamo:   ${currentIdx + 1}`,
-    `Fecha generación: ${new Date().toLocaleDateString('es-AR')}`,
-    '',
-    '── DATOS DEL RECLAMO ─────────────────────',
-    ...headers.map(h => `${h.padEnd(24)}: ${row[h] || '—'}`),
-    '',
-    '── RESOLUCIÓN ────────────────────────────',
-    `Estado:           ${ci.estado || '—'}`,
-    `Acción correctiva:`,
-    ci.accion || '—',
-    '',
-    `Responsable cierre: ${ci.responsable || '—'}`,
-    `Fecha de cierre:    ${ci.fecha || '—'}`,
-    '',
-    '── NOTAS INTERNAS ────────────────────────',
-    ci.notas || '—',
-    '',
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    `Firma responsable: _______________________`,
-    `Fecha:             _______________________`,
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-  ];
-  const text = lines.join('\n');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, H = 297;
+  const ML = 18, MR = 18, MT = 20;
+  const CW = W - ML - MR; // content width
+  let y = MT;
 
-  // Download as .txt
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `Informe_Reclamo_${currentIdx+1}_${new Date().toISOString().slice(0,10)}.txt`;
-  a.click();
-  showToast('📄 Informe descargado');
+  // ── helpers ──
+  const hex2rgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+  const setFont = (size, style='normal', color='#e8e4da') => {
+    doc.setFontSize(size);
+    doc.setFont('helvetica', style);
+    doc.setTextColor(...hex2rgb(color));
+  };
+  const fillRect = (x,yy,w,h,color) => { doc.setFillColor(...hex2rgb(color)); doc.rect(x,yy,w,h,'F'); };
+  const hline = (yy, color='#2e2c27', lw=0.3) => {
+    doc.setDrawColor(...hex2rgb(color)); doc.setLineWidth(lw);
+    doc.line(ML, yy, W-MR, yy);
+  };
+  const addWrappedText = (text, x, yy, maxW, lineH, size=9, style='normal', color='#a09b90') => {
+    setFont(size, style, color);
+    const lines = doc.splitTextToSize(String(text||'—'), maxW);
+    doc.text(lines, x, yy);
+    return yy + lines.length * lineH;
+  };
+  const checkPage = (needed=12) => {
+    if (y + needed > H - 20) { doc.addPage(); fillRect(0,0,W,H,'#0f0e0c'); y = MT; }
+  };
+
+  // ── PAGE BACKGROUND ──
+  fillRect(0, 0, W, H, '#0f0e0c');
+
+  // ── HEADER BAND ──
+  fillRect(0, 0, W, 38, '#1a1916');
+  // accent left strip
+  fillRect(0, 0, 4, 38, '#e8c547');
+  // title
+  setFont(15, 'bold', '#e8e4da');
+  doc.text('INFORME DE CIERRE DE RECLAMO', ML + 6, 14);
+  setFont(8, 'normal', '#6b6760');
+  doc.text('R-CO-001 · Reclamos de Franquiciados y Distribuidores', ML + 6, 21);
+  // reclamo number badge
+  fillRect(W - MR - 30, 6, 30, 12, '#e8c547');
+  setFont(9, 'bold', '#0f0e0c');
+  doc.text(`N° ${String(currentIdx + 1).padStart(4,'0')}`, W - MR - 15, 14, { align:'center' });
+  // date
+  setFont(7, 'normal', '#6b6760');
+  doc.text(`Generado: ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR')}`, W - MR, 26, { align:'right' });
+
+  y = 48;
+
+  // ── SECTION helper ──
+  const sectionHeader = (title) => {
+    checkPage(14);
+    fillRect(ML, y, CW, 7, '#1a1916');
+    fillRect(ML, y, 3, 7, '#e8c547');
+    setFont(7, 'bold', '#e8c547');
+    doc.text(title.toUpperCase(), ML + 6, y + 5);
+    y += 12;
+  };
+
+  // ── KEY-VALUE row ──
+  const kvRow = (label, value, wide=false) => {
+    checkPage(10);
+    const labelW = wide ? 60 : 45;
+    setFont(7, 'normal', '#6b6760');
+    doc.text(String(label), ML, y);
+    setFont(8, 'normal', '#e8e4da');
+    const lines = doc.splitTextToSize(String(value||'—'), CW - labelW - 4);
+    doc.text(lines, ML + labelW, y);
+    y += Math.max(lines.length * 4.5, 6);
+  };
+
+  // ── DATOS DEL RECLAMO ──
+  sectionHeader('Datos del Reclamo');
+  headers.forEach(h => {
+    const v = row[h] || '—';
+    const isLong = String(v).length > 60;
+    if (isLong) {
+      checkPage(16);
+      setFont(7, 'normal', '#6b6760');
+      doc.text(String(h), ML, y);
+      y += 5;
+      y = addWrappedText(v, ML + 4, y, CW - 4, 4.5, 8, 'normal', '#e8e4da');
+      y += 3;
+    } else {
+      kvRow(h, v);
+    }
+  });
+
+  y += 4;
+  hline(y, '#2e2c27', 0.2);
+  y += 8;
+
+  // ── RESOLUCIÓN ──
+  sectionHeader('Resolución & Cierre');
+
+  // Estado badge
+  checkPage(14);
+  const estadoColors = {
+    'Cerrado conforme':    ['#7eb89a','#0f2018'],
+    'Cerrado disconforme': ['#e05c5c','#200f0f'],
+    'En proceso':          ['#c8953a','#201408'],
+    'Pendiente':           ['#e8c547','#1a1400'],
+    'Sin respuesta':       ['#6b6760','#1a1916'],
+  };
+  const ec = estadoColors[ci.estado] || ['#3d3a32','#e8e4da'];
+  fillRect(ML, y - 4, 55, 8, ec[0]);
+  setFont(8, 'bold', ec[1]);
+  doc.text(ci.estado || 'Sin definir', ML + 27.5, y + 1, { align:'center' });
+  y += 10;
+
+  kvRow('Acción correctiva:', ''); y -= 2;
+  y = addWrappedText(ci.accion || '—', ML + 4, y, CW - 4, 4.5, 8, 'normal', '#e8e4da');
+  y += 4;
+  kvRow('Responsable del cierre:', ci.responsable);
+  kvRow('Fecha de cierre:', ci.fecha ? new Date(ci.fecha + 'T00:00:00').toLocaleDateString('es-AR') : '—');
+
+  if (ci.notas) {
+    y += 4;
+    hline(y, '#2e2c27', 0.2);
+    y += 8;
+    sectionHeader('Notas Internas');
+    y = addWrappedText(ci.notas, ML + 4, y, CW - 4, 4.8, 8, 'normal', '#a09b90');
+    y += 4;
+  }
+
+  // ── FIRMA ──
+  y += 8;
+  checkPage(40);
+  hline(y, '#2e2c27', 0.2);
+  y += 10;
+  sectionHeader('Firma y Conformidad');
+
+  const firmaY = y;
+  // Firma responsable
+  fillRect(ML, firmaY, 80, 22, '#1a1916');
+  setFont(7, 'normal', '#6b6760');
+  doc.text('Firma responsable de cierre', ML + 40, firmaY + 18, { align:'center' });
+  hline(firmaY + 14, '#3d3a32', 0.3);
+  doc.line(ML, firmaY+14, ML+80, firmaY+14); // override with correct coords
+  doc.setDrawColor(...hex2rgb('#3d3a32')); doc.setLineWidth(0.3);
+  doc.line(ML + 4, firmaY + 14, ML + 76, firmaY + 14);
+
+  // Fecha
+  fillRect(W - MR - 60, firmaY, 60, 22, '#1a1916');
+  setFont(7, 'normal', '#6b6760');
+  doc.text('Fecha', W - MR - 30, firmaY + 18, { align:'center' });
+  doc.line(W - MR - 56, firmaY + 14, W - MR - 4, firmaY + 14);
+
+  y = firmaY + 30;
+
+  // ── FOOTER every page ──
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    fillRect(0, H - 12, W, 12, '#1a1916');
+    hline(H - 12, '#2e2c27', 0.3);
+    setFont(6.5, 'normal', '#6b6760');
+    doc.text('Documento generado por Sistema de Gestión de Reclamos · R-CO-001', ML, H - 5);
+    doc.text(`Página ${p} de ${totalPages}`, W - MR, H - 5, { align:'right' });
+  }
+
+  // ── SAVE ──
+  const filename = `Informe_Reclamo_${String(currentIdx+1).padStart(4,'0')}_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+  showToast('📄 PDF descargado');
 }
 
 function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
