@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reclamos & Devoluciones · Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --surface: #1a1916;
+    --surface2: #232119;
+    --border: #2e2c27;
+    --border2: #3d3a32;
+    --accent: #e8c547;
+    --accent2: #c8953a;
+    --accent3: #7eb89a;
+    --danger: #e05c5c;
+    --muted: #6b6760;
+    --text: #e8e4da;
+    --text2: #a09b90;
+    --radius: 6px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-icon {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .brand-text h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+    color: var(--text);
+  }
+  .brand-text span {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  #status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text2);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+  .dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.error { background: var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  #btn-refresh {
+    background: var(--accent);
+    color: #0f0e0c;
+    border: none;
+    padding: 7px 16px;
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  #btn-refresh:hover { opacity: 0.85; }
+
+  /* ── LAYOUT ── */
+  .container { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── CONFIG BAR ── */
+  .config-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .config-bar label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .config-bar input[type=text] {
+    flex: 1;
+    min-width: 260px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  .config-bar input[type=text]:focus { border-color: var(--accent); }
+  .config-bar select {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .kpi:hover { border-color: var(--border2); }
+  .kpi::before {
+    content:'';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent);
+  }
+  .kpi.green::before { background: var(--accent3); }
+  .kpi.red::before { background: var(--danger); }
+  .kpi.orange::before { background: var(--accent2); }
+  .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+  .kpi-value { font-family: 'DM Serif Display', serif; font-size: 32px; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+  /* ── PANELS ── */
+  .panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+  @media(max-width:900px){ .panel-row { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--text2); font-family: 'DM Mono', monospace; }
+  .panel-body { padding: 16px 18px; }
+
+  /* ── BAR CHARTS ── */
+  .bar-item { margin-bottom: 10px; }
+  .bar-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+  .bar-label span:first-child { color: var(--text); max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-label span:last-child { color: var(--muted); font-family: 'DM Mono', monospace; }
+  .bar-track { background: var(--bg); border-radius: 2px; height: 6px; }
+  .bar-fill { height: 6px; border-radius: 2px; background: var(--accent); transition: width .6s ease; }
+  .bar-fill.green { background: var(--accent3); }
+  .bar-fill.danger { background: var(--danger); }
+
+  /* ── FILTERS ── */
+  .filter-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-row input, .filter-row select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    outline: none;
+  }
+  .filter-row input:focus, .filter-row select:focus { border-color: var(--accent); }
+  .filter-row input[type=text] { flex: 1; min-width: 180px; }
+  .filter-count { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; margin-left: auto; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  thead th:hover { color: var(--text2); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 9px 12px; color: var(--text2); vertical-align: top; max-width: 220px; }
+  tbody td.highlight { color: var(--text); font-weight: 500; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space: nowrap;
+  }
+  .badge-open { background: rgba(232,197,71,.15); color: var(--accent); border: 1px solid rgba(232,197,71,.3); }
+  .badge-closed { background: rgba(126,184,154,.15); color: var(--accent3); border: 1px solid rgba(126,184,154,.3); }
+  .badge-pending { background: rgba(200,149,58,.15); color: var(--accent2); border: 1px solid rgba(200,149,58,.3); }
+  .badge-default { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    position: sticky; top: 0;
+    background: var(--surface);
+  }
+  .modal-title { font-family: 'DM Serif Display', serif; font-size: 20px; }
+  .modal-close {
+    background: none; border: 1px solid var(--border2); color: var(--text2);
+    width: 28px; height: 28px; border-radius: var(--radius);
+    cursor: pointer; font-size: 16px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+  .modal-body { padding: 20px 24px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  @media(max-width:500px){ .field-grid { grid-template-columns: 1fr; } }
+  .field { }
+  .field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 4px; }
+  .field-value { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .field.full { grid-column: 1 / -1; }
+  .field-value.long {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  .modal-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .cierre-section h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 16px;
+    margin-bottom: 14px;
+    color: var(--accent);
+  }
+  .cierre-field { margin-bottom: 12px; }
+  .cierre-field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+  .cierre-field textarea, .cierre-field input, .cierre-field select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    resize: vertical;
+  }
+  .cierre-field textarea:focus, .cierre-field input:focus, .cierre-field select:focus { border-color: var(--accent); }
+  .cierre-field textarea { min-height: 80px; }
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--accent); color: #0f0e0c;
+    border: none; padding: 9px 20px;
+    border-radius: var(--radius); font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary {
+    background: transparent; color: var(--text2);
+    border: 1px solid var(--border2); padding: 9px 20px;
+    border-radius: var(--radius); font-size: 13px; cursor: pointer;
+  }
+  .btn-secondary:hover { border-color: var(--text2); }
+  .btn-export {
+    background: transparent; color: var(--accent3);
+    border: 1px solid rgba(126,184,154,.4); padding: 9px 20px;
+    border-radius: var(--radius); font-size: 13px; cursor: pointer;
+  }
+  .btn-export:hover { background: rgba(126,184,154,.08); }
+
+  /* ── EMPTY / LOADER ── */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .empty strong { display: block; font-size: 22px; margin-bottom: 8px; color: var(--border2); }
+  .loader { display: flex; justify-content: center; padding: 40px; }
+  .spinner { width: 28px; height: 28px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--accent3); color: #0f0e0c;
+    padding: 10px 18px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s;
+    z-index: 300;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── AUTO-REFRESH indicator ── */
+  .refresh-bar { height: 2px; background: var(--border); position: relative; overflow: hidden; }
+  .refresh-progress { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent); width: 0%; transition: width linear; }
+
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); font-family: 'DM Mono', monospace;
+    margin-bottom: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">📋</div>
+    <div class="brand-text">
+      <h1>Reclamos & Devoluciones</h1>
+      <span>R-CO-001 · Panel de Gestión</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="status-pill"><div class="dot loading" id="dot"></div><span id="status-text">Cargando...</span></div>
+    <button id="btn-refresh" onclick="loadData()">↻ Actualizar</button>
+  </div>
+</header>
+<div class="refresh-bar"><div class="refresh-progress" id="rbar"></div></div>
+
+<div class="container">
+
+  <!-- CONFIG -->
+  <div class="config-bar">
+    <label>URL CSV:</label>
+    <input type="text" id="csv-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vRwKWuJQ3wN7ElID28KcZZ_J3jDc0dg44j0Np15Q56DSzeeRoVoqIiRTAmaUguh-ng2jfeEJzhAvIWi/pub?gid=1359290698&single=true&output=csv" placeholder="Pegá el link CSV de Google Sheets...">
+    <label>Auto-refresh:</label>
+    <select id="refresh-interval">
+      <option value="0">Manual</option>
+      <option value="60">1 min</option>
+      <option value="300" selected>5 min</option>
+      <option value="600">10 min</option>
+    </select>
+    <button id="btn-refresh" onclick="loadData()" style="white-space:nowrap">↻ Cargar</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total reclamos</div><div class="kpi-value" id="k-total">—</div></div>
+    <div class="kpi orange"><div class="kpi-label">Pendientes</div><div class="kpi-value" id="k-pending">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Cerrados</div><div class="kpi-value" id="k-closed">—</div></div>
+    <div class="kpi red"><div class="kpi-label">Sin respuesta</div><div class="kpi-value" id="k-open">—</div></div>
+    <div class="kpi"><div class="kpi-label">Última actualiz.</div><div class="kpi-value" style="font-size:18px" id="k-date">—</div><div class="kpi-sub" id="k-time"></div></div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="panel-row">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Por Tipo de Reclamo</span></div>
+      <div class="panel-body" id="chart-tipo"><div class="empty"><strong>·</strong>Sin datos</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Por Franquiciado / Distribuidor</span></div>
+      <div class="panel-body" id="chart-quien"><div class="empty"><strong>·</strong>Sin datos</div></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Listado de Reclamos</span>
+      <button class="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button>
+    </div>
+    <div class="panel-body">
+      <div class="filter-row">
+        <input type="text" id="search" placeholder="Buscar en todos los campos..." oninput="renderTable()">
+        <select id="filter-estado" onchange="renderTable()"><option value="">Todos los estados</option></select>
+        <select id="filter-tipo" onchange="renderTable()"><option value="">Todos los tipos</option></select>
+        <span class="filter-count" id="filter-count"></span>
+      </div>
+      <div id="table-container"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL DETALLE / CIERRE -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Detalle del Reclamo</div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast">✓ Copiado al portapapeles</div>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let allData = [];
+let headers = [];
+let sortCol = -1, sortAsc = true;
+let refreshTimer = null;
+let progressTimer = null;
+let cierreData = {}; // local closure notes keyed by row index
+
+// ─────────────────────────────────────────────
+// LOAD DATA
+// ─────────────────────────────────────────────
+function loadData() {
+  const url = document.getElementById('csv-url').value.trim();
+  if (!url) { setStatus('error', 'Ingresá la URL CSV'); return; }
+  setStatus('loading', 'Cargando...');
+  document.getElementById('table-container').innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+  Papa.parse(url, {
+    download: true,
+    header: false,
+    skipEmptyLines: true,
+    complete: function(results) {
+      if (!results.data || results.data.length < 2) {
+        setStatus('error', 'Sin datos o URL inválida');
+        document.getElementById('table-container').innerHTML = '<div class="empty"><strong>⚠</strong>No se pudieron cargar datos. Verificá la URL y que el Sheets esté publicado como CSV.</div>';
+        return;
+      }
+      headers = results.data[0];
+      allData = results.data.slice(1).map((row, i) => {
+        let obj = { _idx: i };
+        headers.forEach((h, j) => obj[h] = row[j] || '');
+        return obj;
+      });
+      setStatus('ok', `${allData.length} reclamos · ${new Date().toLocaleTimeString('es-AR')}`);
+      updateKPIs();
+      buildFilters();
+      buildCharts();
+      renderTable();
+      scheduleRefresh();
+    },
+    error: function(err) {
+      setStatus('error', 'Error al cargar');
+      document.getElementById('table-container').innerHTML = `<div class="empty"><strong>⚠</strong>${err.message || 'No se pudo acceder al CSV.'}</div>`;
+    }
+  });
+}
+
+function setStatus(type, msg) {
+  const dot = document.getElementById('dot');
+  document.getElementById('status-text').textContent = msg;
+  dot.className = 'dot ' + (type === 'ok' ? 'ok' : type === 'loading' ? 'loading' : 'error');
+  const now = new Date();
+  document.getElementById('k-date').textContent = now.toLocaleDateString('es-AR');
+  document.getElementById('k-time').textContent = now.toLocaleTimeString('es-AR');
+}
+
+// ─────────────────────────────────────────────
+// AUTO-REFRESH
+// ─────────────────────────────────────────────
+function scheduleRefresh() {
+  clearInterval(refreshTimer);
+  clearInterval(progressTimer);
+  const secs = parseInt(document.getElementById('refresh-interval').value);
+  if (!secs) { document.getElementById('rbar').style.width = '0%'; return; }
+  let elapsed = 0;
+  progressTimer = setInterval(() => {
+    elapsed++;
+    document.getElementById('rbar').style.width = ((elapsed / secs) * 100) + '%';
+    if (elapsed >= secs) { elapsed = 0; loadData(); }
+  }, 1000);
+}
+document.getElementById('refresh-interval').addEventListener('change', scheduleRefresh);
+
+// ─────────────────────────────────────────────
+// DETECT COLUMNS
+// ─────────────────────────────────────────────
+function findCol(keywords) {
+  return headers.find(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase()))) || null;
+}
+
+let COL = {};
+function detectColumns() {
+  COL.fecha    = findCol(['fecha','date','timestamp','marca temporal']);
+  COL.nombre   = findCol(['nombre','razón','franquiciado','distribuidor','quien','responsable']);
+  COL.tipo     = findCol(['tipo','categoría','motivo','categoria','tipo de reclamo']);
+  COL.detalle  = findCol(['detalle','descripción','descripcion','descripcion','observación','observacion','reclamo','descripcion del reclamo']);
+  COL.estado   = findCol(['estado','status','cierre','resolucion','resolución']);
+  COL.producto = findCol(['producto','lote','artículo','articulo']);
+  COL.contacto = findCol(['email','correo','teléfono','telefono','contacto']);
+}
+
+// ─────────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────────
+function updateKPIs() {
+  detectColumns();
+  document.getElementById('k-total').textContent = allData.length;
+  if (COL.estado) {
+    const vals = allData.map(r => (r[COL.estado] || '').toLowerCase());
+    const closed = vals.filter(v => v.includes('cerr') || v.includes('resuel') || v.includes('close')).length;
+    const pending = vals.filter(v => v.includes('pend') || v.includes('proceso') || v.includes('curso')).length;
+    const open = allData.length - closed - pending;
+    document.getElementById('k-closed').textContent = closed;
+    document.getElementById('k-pending').textContent = pending;
+    document.getElementById('k-open').textContent = open;
+  } else {
+    document.getElementById('k-closed').textContent = '—';
+    document.getElementById('k-pending').textContent = '—';
+    document.getElementById('k-open').textContent = '—';
+  }
+}
+
+// ─────────────────────────────────────────────
+// FILTERS
+// ─────────────────────────────────────────────
+function buildFilters() {
+  detectColumns();
+  ['filter-estado','filter-tipo'].forEach(id => {
+    const sel = document.getElementById(id);
+    while(sel.options.length > 1) sel.remove(1);
+  });
+  if (COL.estado) {
+    const vals = [...new Set(allData.map(r => r[COL.estado]).filter(Boolean))].sort();
+    vals.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      document.getElementById('filter-estado').appendChild(o);
+    });
+  }
+  if (COL.tipo) {
+    const vals = [...new Set(allData.map(r => r[COL.tipo]).filter(Boolean))].sort();
+    vals.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      document.getElementById('filter-tipo').appendChild(o);
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+// CHARTS
+// ─────────────────────────────────────────────
+function buildCharts() {
+  detectColumns();
+  renderBarChart('chart-tipo', COL.tipo, 'accent');
+  renderBarChart('chart-quien', COL.nombre, 'green');
+}
+
+function renderBarChart(containerId, col, color) {
+  const el = document.getElementById(containerId);
+  if (!col) { el.innerHTML = '<div class="empty"><strong>·</strong>Columna no detectada</div>'; return; }
+  const counts = {};
+  allData.forEach(r => {
+    const v = (r[col] || 'Sin datos').trim();
+    counts[v] = (counts[v] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,8);
+  const max = sorted[0]?.[1] || 1;
+  el.innerHTML = sorted.map(([label, count]) => `
+    <div class="bar-item">
+      <div class="bar-label"><span>${label}</span><span>${count}</span></div>
+      <div class="bar-track"><div class="bar-fill ${color}" style="width:${(count/max*100).toFixed(1)}%"></div></div>
+    </div>`).join('');
+}
+
+// ─────────────────────────────────────────────
+// TABLE
+// ─────────────────────────────────────────────
+function getFiltered() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const estado = document.getElementById('filter-estado').value;
+  const tipo = document.getElementById('filter-tipo').value;
+  return allData.filter(row => {
+    if (estado && COL.estado && row[COL.estado] !== estado) return false;
+    if (tipo && COL.tipo && row[COL.tipo] !== tipo) return false;
+    if (search) {
+      return Object.values(row).some(v => String(v).toLowerCase().includes(search));
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  detectColumns();
+  const filtered = getFiltered();
+  document.getElementById('filter-count').textContent = `${filtered.length} de ${allData.length}`;
+
+  if (!filtered.length) {
+    document.getElementById('table-container').innerHTML = '<div class="empty"><strong>·</strong>Sin resultados</div>';
+    return;
+  }
+
+  // Choose display columns (prioritize detected ones + first 6)
+  const priorityCols = [COL.fecha, COL.nombre, COL.tipo, COL.producto, COL.estado].filter(Boolean);
+  const extraCols = headers.filter(h => !priorityCols.includes(h)).slice(0, 3);
+  const displayCols = [...new Set([...priorityCols, ...extraCols])].filter(Boolean).slice(0, 7);
+
+  let sorted = [...filtered];
+  if (sortCol >= 0 && displayCols[sortCol]) {
+    const col = displayCols[sortCol];
+    sorted.sort((a,b) => {
+      const av = a[col] || '', bv = b[col] || '';
+      return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }
+
+  const html = `<div class="table-wrap"><table>
+    <thead><tr>
+      ${displayCols.map((c,i) => `<th onclick="sortBy(${i})">${c} ${sortCol===i?(sortAsc?'↑':'↓'):''}</th>`).join('')}
+      <th>Acción</th>
+    </tr></thead>
+    <tbody>
+      ${sorted.map(row => `<tr>
+        ${displayCols.map(c => {
+          const v = row[c] || '';
+          const isEstado = c === COL.estado;
+          const isNombre = c === COL.nombre;
+          const cell = isEstado ? badgify(v) : (v.length > 50 ? v.slice(0,50)+'…' : v);
+          return `<td class="${isNombre?'highlight':''}">${cell}</td>`;
+        }).join('')}
+        <td><button class="badge badge-open" style="cursor:pointer;border:none" onclick="openModal(${row._idx})">Ver / Cerrar</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+  document.getElementById('table-container').innerHTML = html;
+}
+
+function sortBy(i) {
+  if (sortCol === i) sortAsc = !sortAsc; else { sortCol = i; sortAsc = true; }
+  renderTable();
+}
+
+function badgify(v) {
+  const vl = v.toLowerCase();
+  if (!v) return `<span class="badge badge-default">—</span>`;
+  if (vl.includes('cerr') || vl.includes('resuel') || vl.includes('close')) return `<span class="badge badge-closed">${v}</span>`;
+  if (vl.includes('pend') || vl.includes('proceso') || vl.includes('curso')) return `<span class="badge badge-pending">${v}</span>`;
+  return `<span class="badge badge-open">${v}</span>`;
+}
+
+// ─────────────────────────────────────────────
+// MODAL
+// ─────────────────────────────────────────────
+let currentIdx = null;
+
+function openModal(idx) {
+  currentIdx = idx;
+  const row = allData[idx];
+  detectColumns();
+
+  // Build field grid
+  const ignore = ['_idx'];
+  const fields = headers.filter(h => !ignore.includes(h));
+
+  const cierre = cierreData[idx] || { estado: '', accion: '', responsable: '', fecha: '', notas: '' };
+
+  const fieldHtml = fields.map(h => {
+    const v = row[h] || '—';
+    const isLong = v.length > 80;
+    return `<div class="field${isLong?' full':''}">
+      <div class="field-label">${h}</div>
+      <div class="field-value${isLong?' long':''}">${isLong ? v : v}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modal-title').textContent = `Reclamo #${idx+1}${COL.nombre&&row[COL.nombre]?' — '+row[COL.nombre]:''}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="field-grid">${fieldHtml}</div>
+    <hr class="modal-divider">
+    <div class="cierre-section">
+      <h3>✍ Gestión & Cierre</h3>
+      <div class="cierre-field">
+        <label>Estado de resolución</label>
+        <select id="ci-estado">
+          <option value="">— Seleccioná —</option>
+          <option ${cierre.estado==='Pendiente'?'selected':''}>Pendiente</option>
+          <option ${cierre.estado==='En proceso'?'selected':''}>En proceso</option>
+          <option ${cierre.estado==='Cerrado conforme'?'selected':''}>Cerrado conforme</option>
+          <option ${cierre.estado==='Cerrado disconforme'?'selected':''}>Cerrado disconforme</option>
+          <option ${cierre.estado==='Sin respuesta'?'selected':''}>Sin respuesta</option>
+        </select>
+      </div>
+      <div class="cierre-field">
+        <label>Acción correctiva tomada</label>
+        <textarea id="ci-accion" placeholder="Describí la acción tomada...">${cierre.accion}</textarea>
+      </div>
+      <div class="cierre-field">
+        <label>Responsable del cierre</label>
+        <input type="text" id="ci-responsable" value="${cierre.responsable}" placeholder="Nombre y cargo">
+      </div>
+      <div class="cierre-field">
+        <label>Fecha de cierre</label>
+        <input type="date" id="ci-fecha" value="${cierre.fecha}">
+      </div>
+      <div class="cierre-field">
+        <label>Notas adicionales</label>
+        <textarea id="ci-notas" placeholder="Notas internas, evidencias, etc...">${cierre.notas}</textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="saveCierre()">💾 Guardar cierre</button>
+        <button class="btn-export" onclick="generateInforme()">📄 Generar informe</button>
+        <button class="btn-secondary" onclick="closeModalDirect()">Cancelar</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function saveCierre() {
+  cierreData[currentIdx] = {
+    estado: document.getElementById('ci-estado').value,
+    accion: document.getElementById('ci-accion').value,
+    responsable: document.getElementById('ci-responsable').value,
+    fecha: document.getElementById('ci-fecha').value,
+    notas: document.getElementById('ci-notas').value,
+  };
+  showToast('✓ Cierre guardado');
+  closeModalDirect();
+  renderTable();
+}
+
+function generateInforme() {
+  const row = allData[currentIdx];
+  const ci = {
+    estado: document.getElementById('ci-estado').value,
+    accion: document.getElementById('ci-accion').value,
+    responsable: document.getElementById('ci-responsable').value,
+    fecha: document.getElementById('ci-fecha').value,
+    notas: document.getElementById('ci-notas').value,
+  };
+  detectColumns();
+
+  const lines = [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `   INFORME DE CIERRE DE RECLAMO · R-CO-001`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `N° de reclamo:   ${currentIdx + 1}`,
+    `Fecha generación: ${new Date().toLocaleDateString('es-AR')}`,
+    '',
+    '── DATOS DEL RECLAMO ─────────────────────',
+    ...headers.map(h => `${h.padEnd(24)}: ${row[h] || '—'}`),
+    '',
+    '── RESOLUCIÓN ────────────────────────────',
+    `Estado:           ${ci.estado || '—'}`,
+    `Acción correctiva:`,
+    ci.accion || '—',
+    '',
+    `Responsable cierre: ${ci.responsable || '—'}`,
+    `Fecha de cierre:    ${ci.fecha || '—'}`,
+    '',
+    '── NOTAS INTERNAS ────────────────────────',
+    ci.notas || '—',
+    '',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `Firma responsable: _______________________`,
+    `Fecha:             _______________________`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  ];
+  const text = lines.join('\n');
+
+  // Download as .txt
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Informe_Reclamo_${currentIdx+1}_${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  showToast('📄 Informe descargado');
+}
+
+function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
+function closeModalDirect() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ─────────────────────────────────────────────
+// EXPORT CSV
+// ─────────────────────────────────────────────
+function exportCSV() {
+  const filtered = getFiltered();
+  const rows = [headers.join(','), ...filtered.map(r => headers.map(h => `"${(r[h]||'').replace(/"/g,'""')}"`).join(','))];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reclamos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+window.addEventListener('load', loadData);
+</script>
+</body>
+</html>
